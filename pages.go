@@ -4,10 +4,16 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"template"
 	"os"
 	)
+
+
+type App struct {
+	Pages map[string]*Page
+}
 
 type Page struct {
 	Template *template.Template
@@ -16,13 +22,7 @@ type Page struct {
 }
 
 
-//type FormatterMap map[string]func(io.Writer, string, ...interface{})
-var formatterMap = template.FormatterMap{
-	"embed": Embed,
-}
-
-var Pages = make(map[string]*Page)
-
+// debug template
 var debugTplString string = "{page}<div><h3>Debug</h3><h4>Headers</h4>" +
 	"{.section headers}{.repeated section @}{Key} = {Value}<br />{.end}" +
 	"{.or}No Headers{.end}<br />" +
@@ -33,10 +33,16 @@ var debugTplString string = "{page}<div><h3>Debug</h3><h4>Headers</h4>" +
 var debugTpl *template.Template
 
 
+//formatters
+var formatterMap = template.FormatterMap{
+	"embed": EmbedFormatter,
+}
+
+
 /* 
  * Allows templates to embed other templates 
  */
-func Embed(wr io.Writer, str string, data ...interface{}) {
+func EmbedFormatter(wr io.Writer, str string, data ...interface{}) {
 
 	var b []byte
 	var ok bool
@@ -50,12 +56,10 @@ func Embed(wr io.Writer, str string, data ...interface{}) {
     		b = buf.Bytes()
 	}
 	fmt.Fprint(wr,string(b))
-
-
 }
 
 /* 
- * methods to help with templates 
+ * Page methods 
  */
 func (t *Page) Execute(wr io.Writer) {	
 	if t == nil {
@@ -76,24 +80,53 @@ func (t *Page) ParseFile() {
 	}
 }
 
-//
-func NewPage(id, filename string)  (page *Page, err os.Error) {
-	p := new (Page)
+
+
+
+
+//execute the template stored under id.
+func (app *App) Execute(id string, wr io.Writer, data map[string]interface{}) {
+	app.Pages[id].Data = data
+	app.Pages[id].Execute(wr)
+}
+
+//create a new App
+func NewApp() (*App) {
+	app := new(App)
+	app.Pages = make(map[string]*Page)
+	return app
+}
+
+//add a page to the template map, and parse the file as a template
+func (app *App) AddPage(id, filename string) (page *Page, err os.Error) {
+	p := new(Page)
 	p.Filename = filename
 	p.ParseFile()
-	Pages[id] = p
+	app.Pages[id] = p
 	return p, nil
 }
 
-//execute the template stored under id.
-//we use this, so that we don't have to expose the page map
-func Execute(id string, wr io.Writer, data map[string]interface{}) {
-	Pages[id].Data = data
-	Pages[id].Execute(wr)
+//add a directory of templates to the template map
+//templates are added with their filename as their id
+func(app *App) AddDirectory(dirname string) (err os.Error) {
+	files, err := ioutil.ReadDir(dirname)
+	if err != nil {
+		return err
+	}
+	for _, file := range(files) {
+		log.Println(file.Name)
+
+		_, err := app.AddPage(file.Name, dirname + "/" + file.Name)
+		if err != nil {
+			return err
+		}
+	}
+
+
+
+	return nil
+	
 }
-
-
-
 
 
 
