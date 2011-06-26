@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"template"
 	"os"
-	)
+	"path"
+	"path/filepath"
+)
 
+const(
+	templateExtension = ".tpl"
+)
 
 type App struct {
 	Pages map[string]*Page
@@ -109,24 +113,28 @@ func (app *App) AddPage(id, filename string) (page *Page, err os.Error) {
 //add a directory of templates to the template map
 //templates are added with their filename as their id
 func(app *App) AddDirectory(dirname string) (err os.Error) {
-	files, err := ioutil.ReadDir(dirname)
-	if err != nil {
-		return err
-	}
-	for _, file := range(files) {
-		log.Println(file.Name)
-
-		_, err := app.AddPage(file.Name, dirname + "/" + file.Name)
-		if err != nil {
-			return err
-		}
-	}
-
-
-
-	return nil
-	
+	v := &TemplateVisitor{templateBase: dirname, app: app}
+	filepath.Walk(dirname, v, nil)
+	return nil	
 }
 
 
+type TemplateVisitor struct {
+	app *App
+	templateBase string
+}
 
+// visit all directories
+func (v *TemplateVisitor) VisitDir(p string, f *os.FileInfo) bool {
+	return true
+}
+
+func (v *TemplateVisitor) VisitFile(p string, f *os.FileInfo) {
+	if path.Ext(f.Name) == templateExtension {
+		_, err := v.app.AddPage(p[len(v.templateBase):], p)
+		if err != nil {
+			log.Fatal("Cannot parse Template: " + err.String())
+		}
+		log.Printf("Parsed Template %s, %s\n",p[len(v.templateBase):], p)
+	}
+}
