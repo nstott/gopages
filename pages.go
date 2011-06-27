@@ -17,6 +17,7 @@ const(
 
 type App struct {
 	Pages map[string]*Page
+	FormatterMap map[string]func(io.Writer, string, ...interface{})
 }
 
 type Page struct {
@@ -38,9 +39,7 @@ var debugTpl *template.Template
 
 
 //formatters
-var formatterMap = template.FormatterMap{
-	"embed": EmbedFormatter,
-}
+
 
 
 /* 
@@ -70,13 +69,14 @@ func (t *Page) Execute(wr io.Writer) {
 		log.Println("specified page is nil")
 		return
 	}
+	
 	if err := t.Template.Execute(wr, t.Data); err != nil {
 		log.Printf("error executing template: %s", err)
 	}
 }
 
 // parse a file, and store the templates in Page.Template
-func (t *Page) ParseFile() {
+func (t *Page) ParseFile(formatterMap map[string]func(io.Writer, string, ...interface{})) {
 	var err os.Error
 	t.Template, err = template.ParseFile(t.Filename, formatterMap)
 	if err != nil {
@@ -90,35 +90,56 @@ func (t *Page) ParseFile() {
 
 //execute the template stored under id.
 func (app *App) Execute(id string, wr io.Writer, data map[string]interface{}) {
-	app.Pages[id].Data = data
-	app.Pages[id].Execute(wr)
+	page, ok := app.Pages[id]
+	if ok {
+		page.Data = data
+		page.Execute(wr)
+	} else {
+		log.Fatal("Template " + id + " Not Found")
+	}
+
+
 }
 
 //create a new App
 func NewApp() (*App) {
 	app := new(App)
 	app.Pages = make(map[string]*Page)
+	app.FormatterMap = template.FormatterMap{}
 	return app
 }
 
 //add a page to the template map, and parse the file as a template
 func (app *App) AddPage(id, filename string) (page *Page, err os.Error) {
-	p := new(Page)
-	p.Filename = filename
-	p.ParseFile()
+	p := &Page{Filename: filename}
 	app.Pages[id] = p
 	return p, nil
 }
+
+// parse all the templates
+func (app *App) ParseAllPages() {
+	for k,v := range(app.Pages) {
+		log.Printf("Parsing %s", k)
+		v.ParseFile(app.FormatterMap)				
+	}
+}
+
 
 //add a directory of templates to the template map
 //templates are added with their filename as their id
 func(app *App) AddDirectory(dirname string) (err os.Error) {
 	v := &TemplateVisitor{templateBase: dirname, app: app}
 	filepath.Walk(dirname, v, nil)
+	
+	for k,_ := range(app.Pages) {
+		app.FormatterMap["embed:" + k] = EmbedFormatter
+	}
+
+	app.ParseAllPages()
 	return nil	
 }
 
-
+// a visitor that carries the app and template base and catches all properly named template files
 type TemplateVisitor struct {
 	app *App
 	templateBase string
@@ -128,7 +149,7 @@ type TemplateVisitor struct {
 func (v *TemplateVisitor) VisitDir(p string, f *os.FileInfo) bool {
 	return true
 }
-
+// for each file matching the proper extension, we want to add it to the app's template set
 func (v *TemplateVisitor) VisitFile(p string, f *os.FileInfo) {
 	if path.Ext(f.Name) == templateExtension {
 		_, err := v.app.AddPage(p[len(v.templateBase):], p)
