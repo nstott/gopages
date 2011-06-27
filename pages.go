@@ -1,8 +1,18 @@
+/*
+ * package pages implements a set of types and methods to help manage multiple pages across an web application.
+ *
+ * Apps are created, and parse directories for .tpl files.  Each .tpl file becomes a Page, and is able to be executed and rendered to an
+ * io.Writer
+ * 
+ * A formatter map is also applied to templates as they are parsed, and enables the execution of nested templates.
+ * if a directory contains index.html, and a subdirectory 'bits' contains a file named header.tpl
+ * then within index.html, you can execute a subtemplate by calling {@|embed:bits/header.tpl}
+ * this passes the entire data context to the sub template.  
+ *
+ */
 package pages
 
 import (
-	"bytes"
-	"fmt"
 	"io"
 	"log"
 	"template"
@@ -13,19 +23,8 @@ import (
 
 const(
 	templateExtension = ".tpl"
+	embedCommand = "embed"
 )
-
-type App struct {
-	Pages map[string]*Page
-	FormatterMap map[string]func(io.Writer, string, ...interface{})
-}
-
-type Page struct {
-	Template *template.Template
-	Filename string
-	Data map[string]interface{}
-}
-
 
 // debug template
 var debugTplString string = "{page}<div><h3>Debug</h3><h4>Headers</h4>" +
@@ -38,32 +37,20 @@ var debugTplString string = "{page}<div><h3>Debug</h3><h4>Headers</h4>" +
 var debugTpl *template.Template
 
 
-//formatters
 
 
-
-/* 
- * Allows templates to embed other templates 
+/*
+ * A page contains a parsed template, the filename, and a map of the data
+ * 
  */
-func EmbedFormatter(wr io.Writer, str string, data ...interface{}) {
-
-	var b []byte
-	var ok bool
-	if len(data) == 1 {
-		b, ok = data[0].([]byte)
-	}
-
-    	if !ok {
-    		var buf bytes.Buffer
-    		fmt.Fprint(&buf, data...)
-    		b = buf.Bytes()
-	}
-	fmt.Fprint(wr,string(b))
+type Page struct {
+	Template *template.Template
+	Filename string
+	Data map[string]interface{}
 }
 
-/* 
- * Page methods 
- */
+
+// use the page's internal data map and execute a page that has already been parsed.
 func (t *Page) Execute(wr io.Writer) {	
 	if t == nil {
 		log.Println("specified page is nil")
@@ -86,6 +73,12 @@ func (t *Page) ParseFile(formatterMap map[string]func(io.Writer, string, ...inte
 
 
 
+// an app contains a map of pages, as well as a formattermap.
+// add a directory containing .tpl files to an app, and then perform 
+type App struct {
+	Pages map[string]*Page
+	FormatterMap map[string]func(io.Writer, string, ...interface{})
+}
 
 
 //execute the template stored under id.
@@ -97,8 +90,6 @@ func (app *App) Execute(id string, wr io.Writer, data map[string]interface{}) {
 	} else {
 		log.Fatal("Template " + id + " Not Found")
 	}
-
-
 }
 
 //create a new App
@@ -110,14 +101,14 @@ func NewApp() (*App) {
 }
 
 //add a page to the template map, and parse the file as a template
-func (app *App) AddPage(id, filename string) (page *Page, err os.Error) {
+func (app *App) addPage(id, filename string) (page *Page, err os.Error) {
 	p := &Page{Filename: filename}
 	app.Pages[id] = p
 	return p, nil
 }
 
 // parse all the templates
-func (app *App) ParseAllPages() {
+func (app *App) parseAllPages() {
 	for k,v := range(app.Pages) {
 		log.Printf("Parsing %s", k)
 		v.ParseFile(app.FormatterMap)				
@@ -132,10 +123,18 @@ func(app *App) AddDirectory(dirname string) (err os.Error) {
 	filepath.Walk(dirname, v, nil)
 	
 	for k,_ := range(app.Pages) {
-		app.FormatterMap["embed:" + k] = EmbedFormatter
+		app.FormatterMap[embedCommand + ":" + k] = func(wr io.Writer, str string, data ...interface{}) {
+			filename := str[len(embedCommand)+1:]
+			if page,ok := app.Pages[filename]; ok {
+				err := page.Template.Execute(wr, data)
+				if err != nil {
+					log.Println("Failed to execute " + filename)
+				}
+			}
+		}
 	}
 
-	app.ParseAllPages()
+	app.parseAllPages()
 	return nil	
 }
 
@@ -152,7 +151,7 @@ func (v *TemplateVisitor) VisitDir(p string, f *os.FileInfo) bool {
 // for each file matching the proper extension, we want to add it to the app's template set
 func (v *TemplateVisitor) VisitFile(p string, f *os.FileInfo) {
 	if path.Ext(f.Name) == templateExtension {
-		_, err := v.app.AddPage(p[len(v.templateBase):], p)
+		_, err := v.app.addPage(p[len(v.templateBase):], p)
 		if err != nil {
 			log.Fatal("Cannot parse Template: " + err.String())
 		}
