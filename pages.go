@@ -1,15 +1,15 @@
-/*
- * package pages implements a set of types and methods to help manage multiple pages across an web application.
- *
- * Apps are created, and parse directories for .tpl files.  Each .tpl file becomes a Page, and is able to be executed and rendered to an
- * io.Writer
- * 
- * A formatter map is also applied to templates as they are parsed, and enables the execution of nested templates.
- * if a directory contains index.html, and a subdirectory 'bits' contains a file named header.tpl
- * then within index.html, you can execute a subtemplate by calling {@|embed:bits/header.tpl}
- * this passes the entire data context to the sub template.  
- *
- */
+
+//package pages implements a set of types and methods to help manage multiple pages across an web application.
+//
+//Apps are created, and parse directories for .tpl files.  Each .tpl file becomes a Page, 
+// and is able to be executed and rendered to an io.Writer
+// 
+//A formatter map is also applied to templates as they are parsed, and enables the execution of nested templates.
+// if a directory contains index.html, and a subdirectory 'bits' contains a file named header.tpl
+// then within index.html, you can execute a subtemplate by calling {@|embed:bits/header.tpl}
+// this passes the entire data context to the sub template.  
+//
+
 package pages
 
 import (
@@ -27,6 +27,7 @@ const(
 )
 
 // debug template
+
 var debugTplString string = "{page}<div><h3>Debug</h3><h4>Headers</h4>" +
 	"{.section headers}{.repeated section @}{Key} = {Value}<br />{.end}" +
 	"{.or}No Headers{.end}<br />" +
@@ -39,10 +40,8 @@ var debugTpl *template.Template
 
 
 
-/*
- * A page contains a parsed template, the filename, and a map of the data
- * 
- */
+
+//A page contains a parsed template, the filename, and a map of the data
 type Page struct {
 	Template *template.Template
 	Filename string
