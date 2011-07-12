@@ -109,8 +109,9 @@ func (app *App) addPage(id, filename string) (page *Page, err os.Error) {
 // parse all the templates
 func (app *App) parseAllPages() {
 	for k,v := range(app.Pages) {
-		log.Printf("Parsing %s", k)
-		v.ParseFile(app.FormatterMap)				
+		log.Printf("Parsing %s %v\n", k, app.FormatterMap)
+		v.ParseFile(app.FormatterMap)
+		log.Printf("Finished Parsing %s\n",k)
 	}
 }
 
